@@ -1,14 +1,16 @@
+const vasteIngredienten = [
+  "Volle melk",
+  "Room (35%)",
+  "Magere melk",
+  "Suiker",
+  "Dextrose",
+  "Glucosepoeder",
+  "Bindmiddel"
+];
 
+const geselecteerdeIngredienten = [
+  ...vasteIngredienten,
+  ...extraIngredientenDieAanStaan
+];
 
-const titel = document.getElementById("titel");
-
-const titelKnop = document.getElementById("titelKnop");
-
-
-titelKnop.addEventListener("click", function () {
-
-    titel.textContent =
-        "Alaeeeeeee";
-
-})
 
