@@ -1,0 +1,332 @@
+
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IJsrecept Calculator</title>
+<style>
+body{font-family:Arial,sans-serif;background:#fff3f7;color:#392d42;padding:20px;max-width:1100px;margin:auto}
+h1,h2{color:#805b9b}
+section{background:white;padding:18px;margin:15px 0;border-radius:15px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+label{display:block;margin-bottom:5px}
+input[type=number]{width:90px;padding:8px;border:1px solid #d9c9df;border-radius:7px}
+.ingredient{display:flex;align-items:center;justify-content:space-between;padding:10px;margin:5px 0;background:#fff8fb;border-radius:8px}
+button{background:#805b9b;color:white;border:0;padding:12px 18px;border-radius:8px;cursor:pointer;margin:5px 5px 5px 0}
+button.reset{background:#f4dce9;color:#553b66}
+small,.note{color:#756a7b}
+table{border-collapse:collapse;width:100%;margin-top:15px}
+th,td{padding:9px;border-bottom:1px solid #eadce9;text-align:right}
+th:first-child,td:first-child{text-align:left}
+.tablewrap{overflow-x:auto}
+.warning{background:#fff0dc;padding:12px;border-radius:8px;margin-top:10px}
+.good{background:#e4f6e9;padding:12px;border-radius:8px;margin-top:10px}
+@media(max-width:600px){body{padding:10px}section{padding:12px}}
+</style>
+</head>
+<body>
+
+<h1>🍦 IJsrecept Calculator</h1>
+<p>Stel je ingrediënten en gewenste ijssamenstelling in.</p>
+
+<section>
+<h2>1. Instellingen</h2>
+<div class="grid">
+  <div>
+    <label for="gewicht">Totaalgewicht (g)</label>
+    <input id="gewicht" type="number" min="100" value="1000">
+  </div>
+  <div>
+    <label for="doelPOD">Gewenste POD</label>
+    <input id="doelPOD" type="number" min="0" value="16" step="0.1">
+  </div>
+  <div>
+    <label for="doelPAC">Gewenste PAC</label>
+    <input id="doelPAC" type="number" min="0" value="25" step="0.1">
+  </div>
+</div>
+</section>
+
+<section>
+<h2>2. Gewenste samenstelling</h2>
+<p class="note">Pas de percentages aan. De bereiken komen uit je afbeelding.</p>
+
+<div class="grid">
+  <div>
+    <label>Suiker (15–23%)</label>
+    <input id="doelSuiker" type="number" min="15" max="23" value="16" step="0.1"> %
+  </div>
+  <div>
+    <label>Vet (6–12%)</label>
+    <input id="doelVet" type="number" min="6" max="12" value="6" step="0.1"> %
+  </div>
+  <div>
+    <label>Vetvrije melkbestanddelen - VVMB (8–12%)</label>
+    <input id="doelVVMB" type="number" min="8" max="12" value="8" step="0.1"> %
+  </div>
+  <div>
+    <label>Overige droge stoffen (0,5–1%)</label>
+    <input id="doelOverig" type="number" min="0.5" max="1" value="0.5" step="0.1"> %
+  </div>
+  <div>
+    <label>Water (65–75%)</label>
+    <input id="doelWater" type="number" min="65" max="75" value="69.5" step="0.1"> %
+  </div>
+</div>
+<p id="somPercentages"></p>
+</section>
+
+<section>
+<h2>3. 🔒 Vaste ingrediënten</h2>
+<p>Deze zeven ingrediënten zitten altijd in het recept.</p>
+<div id="vasteIngredienten"></div>
+</section>
+
+<section>
+<h2>4. ✨ Extra ingrediënten</h2>
+<p class="note">Vink aan wat je aan je recept wilt toevoegen.</p>
+<div id="extraIngredienten"></div>
+</section>
+
+<section>
+<h2>5. Resultaat</h2>
+<button onclick="berekenRecept()">Bereken recept</button>
+<button class="reset" onclick="resetRecept()">Reset</button>
+<div id="melding"></div>
+<div id="resultaat"></div>
+</section>
+
+<script>
+/*
+Samenstellingswaarden zijn percentages uit de opgegeven PDF.
+Bij ingrediënten waarvoor de PDF geen specifieke rij geeft,
+wordt geen nieuwe waarde verzonnen.
+*/
+
+const ingredienten = [
+ {naam:"Volle melk",suiker:0,vet:3.5,vvmb:9,overig:0,water:87.5,pac:4.905,pod:0.7848,vast:true},
+ {naam:"Room (35%)",suiker:0,vet:35,vvmb:5.8,overig:0,water:59.2,pac:3.161,pod:0.50576,vast:true},
+ {naam:"Magere melkpoeder",suiker:0,vet:1,vvmb:95,overig:0,water:4,pac:51.775,pod:8.284,vast:true},
+ {naam:"Suiker",suiker:100,vet:0,vvmb:0,overig:0,water:0,pac:1,pod:1,vast:true},
+ {naam:"Dextrose",suiker:92,vet:0,vvmb:0,overig:0,water:8,pac:1.9,pod:0.7,vast:true},
+ {naam:"Glucosepoeder",suiker:81,vet:0,vvmb:0,overig:0,water:19,pac:0.65,pod:0.3,vast:true},
+ {naam:"Bindmiddel",suiker:0,vet:0,vvmb:0,overig:100,water:0,pac:0,pod:0,vast:true},
+
+ {naam:"Water",suiker:0,vet:0,vvmb:0,overig:0,water:100,pac:0,pod:0},
+ {naam:"Melkpoeder",suiker:0,vet:26,vvmb:70,overig:0,water:4,pac:38.15,pod:6.104},
+ {naam:"Room (38%)",suiker:0,vet:38,vvmb:5.6,overig:0,water:56.4,pac:3.052,pod:0.48832},
+ {naam:"Boter",suiker:0,vet:84,vvmb:0,overig:0,water:16,pac:0,pod:0},
+ {naam:"Gezoete gecondenseerde melk",suiker:43,vet:9,vvmb:24,overig:0,water:24,pac:13.08,pod:2.0928},
+ {naam:"Geëvaporeerde melk",suiker:0,vet:8.5,vvmb:21,overig:0,water:70.5,pac:11.445,pod:1.8312},
+ {naam:"Volle yoghurt",suiker:0,vet:4,vvmb:9.5,overig:0,water:86.5,pac:5.1775,pod:0.8284},
+ {naam:"Invertsuiker",suiker:75,vet:0,vvmb:0,overig:0,water:25,pac:1.9,pod:1.3},
+ {naam:"Honing",suiker:80,vet:0,vvmb:0,overig:0,water:20,pac:1.9,pod:0.75},
+ {naam:"Ei",suiker:0,vet:14,vvmb:0,overig:11,water:75,pac:0,pod:0},
+ {naam:"Eiwit",suiker:0,vet:30,vvmb:0,overig:18,water:52,pac:0,pod:0},
+ {naam:"Cacao",suiker:0,vet:23,vvmb:0,overig:72,water:5,pac:0,pod:0},
+ {naam:"Chocolade 70%",suiker:30,vet:40,vvmb:0,overig:30,water:0,pac:0,pod:0},
+ {naam:"Muntpasta",suiker:78,vet:0,vvmb:0,overig:2,water:20,pac:0,pod:0},
+ {naam:"Hazelnootpasta",suiker:0,vet:65,vvmb:35,overig:0,water:0,pac:19.075,pod:3.052},
+
+ {naam:"Watermeloen",suiker:6,vet:0,vvmb:0,overig:5,water:89,pac:0.06,pod:0.06},
+ {naam:"Abrikoos",suiker:9,vet:0,vvmb:0,overig:9,water:82,pac:0.09,pod:0.09},
+ {naam:"Ananas",suiker:12,vet:0,vvmb:0,overig:9,water:79,pac:0.12,pod:0.12},
+ {naam:"Sinaasappel",suiker:8,vet:0,vvmb:0,overig:8,water:84,pac:0.08,pod:0.08},
+ {naam:"Banaan",suiker:14,vet:0,vvmb:0,overig:9,water:77,pac:0.14,pod:0.14},
+ {naam:"Kers",suiker:10,vet:0,vvmb:0,overig:6,water:84,pac:0.1,pod:0.1},
+ {naam:"Vijg",suiker:12,vet:0,vvmb:0,overig:8,water:80,pac:0.12,pod:0.12},
+ {naam:"Aardbei",suiker:8,vet:0,vvmb:0,overig:7,water:85,pac:0.08,pod:0.08},
+ {naam:"Kiwi",suiker:7,vet:0,vvmb:0,overig:3,water:90,pac:0.07,pod:0.07},
+ {naam:"Framboos",suiker:7,vet:0,vvmb:0,overig:7,water:86,pac:0.07,pod:0.07},
+ {naam:"Citroen",suiker:5,vet:0,vvmb:0,overig:8,water:87,pac:0.05,pod:0.05},
+ {naam:"Mandarijn",suiker:8,vet:0,vvmb:0,overig:8,water:84,pac:0.08,pod:0.08},
+ {naam:"Appel",suiker:8,vet:0,vvmb:0,overig:6,water:86,pac:0.08,pod:0.08},
+ {naam:"Mango",suiker:13,vet:0,vvmb:0,overig:8,water:79,pac:0.13,pod:0.13},
+ {naam:"Meloen",suiker:8,vet:0,vvmb:0,overig:5,water:87,pac:0.08,pod:0.08},
+ {naam:"Passievrucht",suiker:7,vet:0,vvmb:0,overig:4,water:89,pac:0.07,pod:0.07},
+ {naam:"Papaja",suiker:8,vet:0,vvmb:0,overig:7,water:85,pac:0.08,pod:0.08},
+ {naam:"Peer",suiker:9,vet:0,vvmb:0,overig:6,water:85,pac:0.09,pod:0.09},
+ {naam:"Pompelmoes",suiker:8,vet:0,vvmb:0,overig:6,water:86,pac:0.08,pod:0.08},
+ {naam:"Tomaat",suiker:4,vet:0,vvmb:0,overig:4,water:92,pac:0.04,pod:0.04},
+ {naam:"Perzik",suiker:9,vet:0,vvmb:0,overig:9,water:82,pac:0.09,pod:0.09},
+ {naam:"Braambes",suiker:6,vet:0,vvmb:0,overig:9,water:85,pac:0.06,pod:0.06},
+ {naam:"Druif",suiker:20,vet:0,vvmb:0,overig:5,water:75,pac:0.2,pod:0.2},
+ {naam:"Maltodextrine",suiker:96,vet:0,vvmb:0,overig:0,water:4,pac:0.19,pod:0.11},
+ {naam:"Inuline",suiker:7,vet:0,vvmb:0,overig:90,water:3,pac:0.9,pod:0.45}
+];
+
+const vast = ingredienten.filter(x=>x.vast);
+const extra = ingredienten.filter(x=>!x.vast);
+const gekozen = new Set();
+
+function toonIngredienten(){
+ document.getElementById("vasteIngredienten").innerHTML =
+   vast.map(x=>`<div class="ingredient"><span>${x.naam}</span><b>🔒 Vast</b></div>`).join("");
+
+ document.getElementById("extraIngredienten").innerHTML =
+   extra.map((x,i)=>`
+     <label class="ingredient">
+       <span>${x.naam}</span>
+       <input type="checkbox" ${gekozen.has(x.naam)?"checked":""}
+         onchange="selecteer('${x.naam.replace(/'/g,"\\'")}',this.checked)">
+     </label>`).join("");
+}
+
+function selecteer(naam,aan){
+ if(aan) gekozen.add(naam);
+ else gekozen.delete(naam);
+}
+
+function getDoelen(){
+ return {
+  suiker:Number(document.getElementById("doelSuiker").value),
+  vet:Number(document.getElementById("doelVet").value),
+  vvmb:Number(document.getElementById("doelVVMB").value),
+  overig:Number(document.getElementById("doelOverig").value),
+  water:Number(document.getElementById("doelWater").value),
+  pod:Number(document.getElementById("doelPOD").value),
+  pac:Number(document.getElementById("doelPAC").value)
+ };
+}
+
+function controleerPercentages(d){
+ const velden=[
+  ["Suiker",d.suiker,15,23],
+  ["Vet",d.vet,6,12],
+  ["VVMB",d.vvmb,8,12],
+  ["Overige droge stoffen",d.overig,0.5,1],
+  ["Water",d.water,65,75]
+ ];
+ for(const [naam,waarde,min,max] of velden){
+  if(!Number.isFinite(waarde)||waarde<min||waarde>max)
+   return `${naam} moet tussen ${min}% en ${max}% liggen.`;
+ }
+ const som=d.suiker+d.vet+d.vvmb+d.overig+d.water;
+ if(Math.abs(som-100)>0.05)
+  return `Je percentages tellen op tot ${som.toFixed(1)}%. Ze moeten samen 100% zijn.`;
+ return "";
+}
+
+function berekenRecept(){
+ const totaal=Number(document.getElementById("gewicht").value);
+ const d=getDoelen();
+ const fout=controleerPercentages(d);
+ const melding=document.getElementById("melding");
+ const resultaat=document.getElementById("resultaat");
+ resultaat.innerHTML="";
+
+ if(!Number.isFinite(totaal)||totaal<100){
+  melding.className="warning";
+  melding.textContent="Vul een geldig totaalgewicht van minstens 100 gram in.";
+  return;
+ }
+ if(fout){
+  melding.className="warning";
+  melding.textContent=fout;
+  return;
+ }
+
+ const lijst=ingredienten.filter(x=>x.vast||gekozen.has(x.naam));
+ if(lijst.length<1)return;
+
+ /*
+  Zoek een mogelijke receptverdeling.
+  Dit is een eenvoudige willekeurige zoekmethode, geen professionele
+  lineaire optimalisatiesolver. Het resultaat kan dus benaderend zijn.
+ */
+ let beste=null;
+ const doel={
+  suiker:d.suiker,vet:d.vet,vvmb:d.vvmb,
+  overig:d.overig,water:d.water,pod:d.pod,pac:d.pac
+ };
+
+ function score(hoeveelheden){
+  const actual={suiker:0,vet:0,vvmb:0,overig:0,water:0,pod:0,pac:0};
+  hoeveelheden.forEach((g,i)=>{
+   const x=lijst[i];
+   actual.suiker+=g*x.suiker/100;
+   actual.vet+=g*x.vet/100;
+   actual.vvmb+=g*x.vvmb/100;
+   actual.overig+=g*x.overig/100;
+   actual.water+=g*x.water/100;
+   actual.pod+=g*x.pod/100;
+   actual.pac+=g*x.pac/100;
+  });
+  const pct={};
+  ["suiker","vet","vvmb","overig","water"].forEach(k=>pct[k]=actual[k]/totaal*100);
+  let s=0;
+  ["suiker","vet","vvmb","overig","water"].forEach(k=>{
+   s+=Math.pow((pct[k]-doel[k])/Math.max(1,doel[k]),2)*4;
+  });
+  s+=Math.pow((actual.pod-doel.pod)/Math.max(1,doel.pod),2);
+  s+=Math.pow((actual.pac-doel.pac)/Math.max(1,doel.pac),2);
+  return {s,actual,pct};
+ }
+
+ for(let poging=0;poging<30000;poging++){
+  let gewichten=lijst.map(()=>Math.pow(Math.random(),2));
+  let som=gewichten.reduce((a,b)=>a+b,0);
+  let gs=gewichten.map(x=>x/som*totaal);
+  const m=score(gs);
+  if(!beste||m.s<beste.m.s) beste={gs,m};
+ }
+
+ const fmt=n=>n.toLocaleString("nl-BE",{maximumFractionDigits:2,minimumFractionDigits:1});
+ let html=`<h2>Berekeningsresultaat</h2>
+ <p><b>Totaalgewicht:</b> ${fmt(totaal)} g</p>
+ <div class="tablewrap"><table>
+ <tr><th>Ingrediënt</th><th>Hoeveelheid (g)</th></tr>`;
+ lijst.forEach((x,i)=>{
+  html+=`<tr><td>${x.naam}</td><td>${fmt(beste.gs[i])}</td></tr>`;
+ });
+ html+="</table></div><h3>Werkelijke samenstelling</h3><div class='tablewrap'><table><tr><th>Onderdeel</th><th>Doel (%)</th><th>Bereikt (%)</th></tr>";
+ const labels=[
+  ["Suiker","suiker"],["Vet","vet"],["VVMB","vvmb"],
+  ["Overige droge stoffen","overig"],["Water","water"]
+ ];
+ labels.forEach(([label,key])=>{
+  html+=`<tr><td>${label}</td><td>${fmt(doel[key])}%</td><td>${fmt(beste.m.pct[key])}%</td></tr>`;
+ });
+ html+=`</table></div>
+ <p><b>Gewenste POD:</b> ${fmt(d.pod)} | <b>Berekende POD:</b> ${fmt(beste.m.actual.pod)}</p>
+ <p><b>Gewenste PAC:</b> ${fmt(d.pac)} | <b>Berekende PAC:</b> ${fmt(beste.m.actual.pac)}</p>
+ <p class="note">De berekende samenstelling kan afwijken van je doelen. Controleer de ingrediëntenwaarden en bespreek de optimalisatie met je leerkracht.</p>`;
+ resultaat.innerHTML=html;
+ melding.className="good";
+ melding.textContent="De berekening is klaar. Controleer hieronder hoe dicht het recept bij je doelen komt.";
+}
+
+function updateSom(){
+ const d=getDoelen();
+ const som=d.suiker+d.vet+d.vvmb+d.overig+d.water;
+ const el=document.getElementById("somPercentages");
+ el.textContent=`Totaal: ${som.toFixed(1)}% ${Math.abs(som-100)<0.05?"✓":"— de percentages moeten samen 100% zijn."}`;
+}
+["doelSuiker","doelVet","doelVVMB","doelOverig","doelWater"].forEach(id=>{
+ document.getElementById(id).addEventListener("input",updateSom);
+});
+
+function resetRecept(){
+ gekozen.clear();
+ document.getElementById("gewicht").value=1000;
+ document.getElementById("doelPOD").value=16;
+ document.getElementById("doelPAC").value=25;
+ document.getElementById("doelSuiker").value=16;
+ document.getElementById("doelVet").value=6;
+ document.getElementById("doelVVMB").value=8;
+ document.getElementById("doelOverig").value=0.5;
+ document.getElementById("doelWater").value=69.5;
+ document.getElementById("resultaat").innerHTML="";
+ document.getElementById("melding").textContent="";
+ toonIngredienten();
+ updateSom();
+}
+
+toonIngredienten();
+updateSom();
+</script>
+</body>
+</html>
+
+```
